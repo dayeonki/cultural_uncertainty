@@ -1,8 +1,8 @@
 #!/bin/sh
 
 #SBATCH --job-name=token_prob
-#SBATCH --output=token_prob.out
-#SBATCH --error=token_prob.error
+#SBATCH --output=logs/token_prob.out
+#SBATCH --error=logs/token_prob.error
 #SBATCH --time=04:00:00
 #SBATCH --mem=32gb
 #SBATCH --account=scavenger
