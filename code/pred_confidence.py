@@ -2,7 +2,7 @@ import torch
 import argparse
 import json
 import os
-from prompt import ko_confidence_prompt, zh_confidence_prompt, en_confidence_prompt
+from prompt import ko_system_prompt, zh_system_prompt, en_system_prompt, ko_confidence_prompt, zh_confidence_prompt, en_confidence_prompt
 from huggingface_hub.hf_api import HfFolder
 from transformers import AutoTokenizer, AutoModelForCausalLM
 
@@ -46,12 +46,18 @@ def main():
         device_map="auto",
     )
 
+    sys_prompt_templates = {
+        "ko": ko_system_prompt,
+        "en": en_system_prompt,
+        "zh": zh_system_prompt,
+    }
     prompt_templates = {
         "ko": ko_confidence_prompt,
         "en": en_confidence_prompt,
         "zh": zh_confidence_prompt,
     }
     prompt_template = prompt_templates.get(args.language)
+    sys_prompt_template = sys_prompt_templates.get(args.language)
     if not prompt_template:
         raise ValueError("Language should be one of the following: en, zh, ko.")
 
@@ -62,6 +68,7 @@ def main():
             if question:
                 prompt = prompt_template.replace("{{question}}", question)
                 messages = [
+                    {"role": "system", "content": sys_prompt_template},
                     {"role": "user", "content": prompt},
                 ]
 

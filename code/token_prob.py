@@ -2,7 +2,7 @@ import torch
 import argparse
 import json
 import os
-from prompt import ko_vanilla_prompt, zh_vanilla_prompt, en_vanilla_prompt
+from prompt import ko_system_prompt, zh_system_prompt, en_system_prompt, ko_vanilla_prompt, zh_vanilla_prompt, en_vanilla_prompt
 from huggingface_hub.hf_api import HfFolder
 from transformers import AutoTokenizer, AutoModelForCausalLM
 import torch.nn.functional as F
@@ -16,7 +16,6 @@ os.environ["HF_HOME"] = CACHE_DIR
 os.environ["HF_DATASETS"] = CACHE_DIR
 HfFolder.save_token(HF_TOKEN)
 
-torch.set_grad_enabled(False)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 def main():
@@ -35,12 +34,18 @@ def main():
         device_map="auto",
     )
 
+    sys_prompt_templates = {
+        "ko": ko_system_prompt,
+        "en": en_system_prompt,
+        "zh": zh_system_prompt,
+    }
     prompt_templates = {
         "ko": ko_vanilla_prompt,
         "en": en_vanilla_prompt,
         "zh": zh_vanilla_prompt,
     }
     prompt_template = prompt_templates.get(args.language)
+    sys_prompt_template = sys_prompt_templates.get(args.language)
     if not prompt_template:
         raise ValueError("Language should be one of the following: en, zh, ko.")
 
@@ -51,6 +56,7 @@ def main():
             if question:
                 prompt = prompt_template.replace("{{question}}", question)
                 messages = [
+                    {"role": "system", "content": sys_prompt_template},
                     {"role": "user", "content": prompt},
                 ]
 
@@ -65,12 +71,23 @@ def main():
                     tokenizer.convert_tokens_to_ids("<|eot_id|>")
                 ]
 
+                # sampling (temperature=0)
+                # outputs = model.generate(
+                #     input_ids,
+                #     max_new_tokens=128,
+                #     eos_token_id=terminators,
+                #     do_sample=False,
+                #     temperature=0.0,
+                #     output_scores=True,
+                #     return_dict_in_generate=True
+                # )
+
+                # greedy decoding
                 outputs = model.generate(
                     input_ids,
                     max_new_tokens=128,
                     eos_token_id=terminators,
                     do_sample=False,
-                    temperature=0.0,
                     output_scores=True,
                     return_dict_in_generate=True
                 )
@@ -79,14 +96,17 @@ def main():
                 answer = tokenizer.decode(response, skip_special_tokens=True)
 
                 token_prob_pairs = []
-                joint_prob = 1.0 
+                joint_prob = 1.0
 
                 for i, score in enumerate(outputs.scores):
                     # softmax: probability distribution over vocab
                     probs = F.softmax(score[0], dim=-1)
-                    # get token ID & probability
                     token_id = response[i].item()
-                    token = tokenizer.decode([token_id], skip_special_tokens=True)
+                    token = tokenizer.decode([token_id], skip_special_tokens=True).strip()
+
+                    # Skip empty strings
+                    if token == "":
+                        continue
                     token_prob = probs[token_id].item()
                     token_prob_pairs.append((token, round(token_prob, 4)))
                     
