@@ -2,14 +2,15 @@ import torch
 import argparse
 import json
 import os
-from prompt import ko_system_prompt, zh_system_prompt, en_system_prompt, ko_vanilla_prompt, zh_vanilla_prompt, en_vanilla_prompt
+from prompt import *
+from utils import marker_prompts
 from huggingface_hub.hf_api import HfFolder
 from transformers import AutoTokenizer, AutoModelForCausalLM
 import torch.nn.functional as F
 
-
-CACHE_DIR = "/fs/clip-scratch/dayeonki/.cache"
-HF_TOKEN = "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"
+# Replace with your own settings
+CACHE_DIR = ""
+HF_TOKEN = ""
 
 
 os.environ["HF_HOME"] = CACHE_DIR
@@ -24,6 +25,7 @@ def main():
     parser.add_argument("--language", type=str)
     parser.add_argument("--input_dir", type=str)
     parser.add_argument("--output_dir", type=str)
+    parser.add_argument("--marker", type=str)
     args = parser.parse_args()
 
     tokenizer = AutoTokenizer.from_pretrained(args.llm, cache_dir=CACHE_DIR)
@@ -34,11 +36,11 @@ def main():
         device_map="auto",
     )
 
-    sys_prompt_templates = {
-        "ko": ko_system_prompt,
-        "en": en_system_prompt,
-        "zh": zh_system_prompt,
-    }
+    if args.marker not in marker_prompts:
+        raise ValueError("Invalid marker. Choose a valid marker for system prompts.")
+
+    sys_prompt_templates = marker_prompts[args.marker]
+    
     prompt_templates = {
         "ko": ko_vanilla_prompt,
         "en": en_vanilla_prompt,

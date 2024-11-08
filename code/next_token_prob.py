@@ -6,9 +6,9 @@ from prompt import *
 from utils import marker_prompts
 from huggingface_hub.hf_api import HfFolder
 from transformers import AutoTokenizer, AutoModelForCausalLM
+import torch.nn.functional as F
 
 # Replace with your own settings
-# TODO(hope): will make this part more flexible
 CACHE_DIR = ""
 HF_TOKEN = ""
 
@@ -18,18 +18,6 @@ os.environ["HF_DATASETS"] = CACHE_DIR
 HfFolder.save_token(HF_TOKEN)
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-def default_generation(model, tokenizer, input_ids, terminators):
-    outputs = model.generate(
-        input_ids,
-        max_new_tokens=512,
-        eos_token_id=terminators,
-        output_scores=True,
-        return_dict_in_generate=True
-    )
-    response = outputs.sequences[0][input_ids.shape[-1]:]
-    answer = tokenizer.decode(response, skip_special_tokens=True)
-    return answer
 
 def main():
     parser = argparse.ArgumentParser()
@@ -52,11 +40,11 @@ def main():
         raise ValueError("Invalid marker. Choose a valid marker for system prompts.")
 
     sys_prompt_templates = marker_prompts[args.marker]
-    
+
     prompt_templates = {
-        "ko": ko_confidence_prompt,
-        "en": en_confidence_prompt,
-        "zh": zh_confidence_prompt,
+        "ko": ko_vanilla_prompt,
+        "en": en_vanilla_prompt,
+        "zh": zh_vanilla_prompt,
     }
     prompt_template = prompt_templates.get(args.language)
     sys_prompt_template = sys_prompt_templates.get(args.language)
@@ -85,13 +73,12 @@ def main():
                     tokenizer.convert_tokens_to_ids("<|eot_id|>")
                 ]
 
-                # Greedy decoding
+                # greedy decoding for the first token only
                 outputs = model.generate(
                     input_ids,
-                    max_new_tokens=512,
+                    max_new_tokens=1,
                     eos_token_id=terminators,
                     do_sample=False,
-                    temperature=0.0,
                     output_scores=True,
                     return_dict_in_generate=True
                 )
@@ -99,19 +86,30 @@ def main():
                 response = outputs.sequences[0][input_ids.shape[-1]:]
                 answer = tokenizer.decode(response, skip_special_tokens=True)
 
+                token_prob_pairs = []
+                joint_prob = 1.0
+
+                # Calculate probability for the next token only
+                if outputs.scores:
+                    next_token_score = outputs.scores[0]  # only the score for the first generated token
+                    probs = F.softmax(next_token_score[0], dim=-1)  # probability distribution over vocab
+                    token_id = response[0].item()
+                    token = tokenizer.decode([token_id], skip_special_tokens=True).strip()
+                    token_prob = probs[token_id].item()
+
+                    token_prob_pairs.append((token, round(token_prob, 4)))
+                    joint_prob = token_prob  # probability for just the first token
+
                 data['answer'] = answer
+                data['token_prob_pairs'] = token_prob_pairs
+                data['next_token_prob'] = round(joint_prob, 4)
+                f_out.write(json.dumps(data, ensure_ascii=False) + '\n')
 
                 print(f"{prompt}")
                 print(f"> {answer}")
+                print(f"Token probability for next token: {token_prob_pairs}")
+                print(f"Probability of next token: {round(joint_prob, 4)}")
                 print("\n======================================================\n")
-
-                # Sampling 10 times to test response variance
-                answer_list = []
-                for _ in range(10):
-                    answer_list.append(default_generation(model, tokenizer, input_ids, terminators))
-
-                data['answer_list'] = answer_list
-                f_out.write(json.dumps(data, ensure_ascii=False) + '\n')
 
 
 if __name__ == "__main__":
