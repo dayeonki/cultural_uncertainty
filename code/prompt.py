@@ -116,3 +116,22 @@ Options:
 (A) Answerable
 (B) Unanswerable
 Response (A / B): """
+
+# Open-ended QA
+ko_qa_prompt = """Task: You will be given a question. Answer the question from the perspective of your country. Do not make any extra inferences outside of the your country.
+
+Country: South Korea
+Question: {{question}}
+Confidence: """
+
+zh_qa_prompt = """Task: You will be given a question. Answer the question from the perspective of your country. Do not make any extra inferences outside of the your country.
+
+Country: China
+Question: {{question}}
+Confidence: """
+
+en_qa_prompt = """Task: You will be given a question. Answer the question from the perspective of your country. Do not make any extra inferences outside of the your country.
+
+Country: United States
+Question: {{question}}
+Confidence: """

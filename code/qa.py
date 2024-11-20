@@ -21,6 +21,18 @@ HfFolder.save_token(HF_TOKEN)
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+def default_generation(model, tokenizer, input_ids, terminators):
+    outputs = model.generate(
+        input_ids,
+        max_new_tokens=512,
+        # eos_token_id=terminators,
+        output_scores=True,
+        return_dict_in_generate=True,
+        pad_token_id=tokenizer.eos_token_id
+    )
+    response = outputs.sequences[0][input_ids.shape[-1]:]
+    answer = tokenizer.decode(response, skip_special_tokens=True)
+    return answer
 
 def main():
     parser = argparse.ArgumentParser()
@@ -45,9 +57,9 @@ def main():
     sys_prompt_templates = marker_prompts[args.marker]
 
     prompt_templates = {
-        "ko": ko_mcq_prompt,
-        "en": en_mcq_prompt,
-        "zh": zh_mcq_prompt,
+        "ko": ko_qa_prompt,
+        "en": en_qa_prompt,
+        "zh": zh_qa_prompt,
     }
     prompt_template = prompt_templates.get(args.language)
     sys_prompt_template = sys_prompt_templates.get(args.language)
@@ -76,26 +88,13 @@ def main():
                     tokenizer.convert_tokens_to_ids("<|eot_id|>")
                 ]
 
-                # Greedy decoding
-                outputs = model.generate(
-                    input_ids,
-                    max_new_tokens=512,
-                    # eos_token_id=terminators,
-                    do_sample=False,
-                    temperature=0.0,
-                    output_scores=True,
-                    return_dict_in_generate=True,
-                    pad_token_id=tokenizer.eos_token_id,
-                )
+                # TODO(hope): use vllm implementation, right now seems too slow
+                # Answer the question 3 times
+                answer_list = []
+                for _ in range(3):
+                    answer_list.append(default_generation(model, tokenizer, input_ids, terminators))
 
-                response = outputs.sequences[0][input_ids.shape[-1]:]
-                answer = tokenizer.decode(response, skip_special_tokens=True)
-
-                data['answer'] = answer
-
-                print(f"{prompt}")
-                print(f"> {answer}")
-                print("\n======================================================\n")
+                data['answer_list'] = answer_list
                 f_out.write(json.dumps(data, ensure_ascii=False) + '\n')
 
 

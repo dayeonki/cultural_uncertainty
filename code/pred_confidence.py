@@ -6,12 +6,14 @@ from prompt import *
 from utils import marker_prompts
 from huggingface_hub.hf_api import HfFolder
 from transformers import AutoTokenizer, AutoModelForCausalLM
+import configparser
 
-# Replace with your own settings
-# TODO(hope): will make this part more flexible
-CACHE_DIR = ""
-HF_TOKEN = ""
+config = configparser.ConfigParser()
+config.read('../config.ini')
+config_keys = config['DEFAULT']
 
+CACHE_DIR = config_keys["CACHE_DIR"]
+HF_TOKEN = config_keys["HF_TOKEN"]
 
 os.environ["HF_HOME"] = CACHE_DIR
 os.environ["HF_DATASETS"] = CACHE_DIR
@@ -23,9 +25,10 @@ def default_generation(model, tokenizer, input_ids, terminators):
     outputs = model.generate(
         input_ids,
         max_new_tokens=512,
-        eos_token_id=terminators,
+        # eos_token_id=terminators,
         output_scores=True,
-        return_dict_in_generate=True
+        return_dict_in_generate=True,
+        pad_token_id=tokenizer.eos_token_id
     )
     response = outputs.sequences[0][input_ids.shape[-1]:]
     answer = tokenizer.decode(response, skip_special_tokens=True)
@@ -89,11 +92,12 @@ def main():
                 outputs = model.generate(
                     input_ids,
                     max_new_tokens=512,
-                    eos_token_id=terminators,
+                    # eos_token_id=terminators,
                     do_sample=False,
                     temperature=0.0,
                     output_scores=True,
-                    return_dict_in_generate=True
+                    return_dict_in_generate=True,
+                    pad_token_id=tokenizer.eos_token_id,
                 )
 
                 response = outputs.sequences[0][input_ids.shape[-1]:]

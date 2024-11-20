@@ -7,11 +7,14 @@ from utils import marker_prompts
 from huggingface_hub.hf_api import HfFolder
 from transformers import AutoTokenizer, AutoModelForCausalLM
 import torch.nn.functional as F
+import configparser
 
-# Replace with your own settings
-CACHE_DIR = ""
-HF_TOKEN = ""
+config = configparser.ConfigParser()
+config.read('../config.ini')
+config_keys = config['DEFAULT']
 
+CACHE_DIR = config_keys["CACHE_DIR"]
+HF_TOKEN = config_keys["HF_TOKEN"]
 
 os.environ["HF_HOME"] = CACHE_DIR
 os.environ["HF_DATASETS"] = CACHE_DIR
@@ -88,10 +91,11 @@ def main():
                 outputs = model.generate(
                     input_ids,
                     max_new_tokens=128,
-                    eos_token_id=terminators,
+                    # eos_token_id=terminators,
                     do_sample=False,
                     output_scores=True,
-                    return_dict_in_generate=True
+                    return_dict_in_generate=True,
+                    pad_token_id=tokenizer.eos_token_id
                 )
 
                 response = outputs.sequences[0][input_ids.shape[-1]:]

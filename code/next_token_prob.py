@@ -7,11 +7,14 @@ from utils import marker_prompts
 from huggingface_hub.hf_api import HfFolder
 from transformers import AutoTokenizer, AutoModelForCausalLM
 import torch.nn.functional as F
+import configparser
 
-# Replace with your own settings
-CACHE_DIR = ""
-HF_TOKEN = ""
+config = configparser.ConfigParser()
+config.read('../config.ini')
+config_keys = config['DEFAULT']
 
+CACHE_DIR = config_keys["CACHE_DIR"]
+HF_TOKEN = config_keys["HF_TOKEN"]
 
 os.environ["HF_HOME"] = CACHE_DIR
 os.environ["HF_DATASETS"] = CACHE_DIR
@@ -77,38 +80,43 @@ def main():
                 outputs = model.generate(
                     input_ids,
                     max_new_tokens=1,
-                    eos_token_id=terminators,
+                    # eos_token_id=terminators,
                     do_sample=False,
                     output_scores=True,
-                    return_dict_in_generate=True
+                    return_dict_in_generate=True,
+                    pad_token_id=tokenizer.eos_token_id
                 )
 
                 response = outputs.sequences[0][input_ids.shape[-1]:]
                 answer = tokenizer.decode(response, skip_special_tokens=True)
 
                 token_prob_pairs = []
-                joint_prob = 1.0
 
                 # Calculate probability for the next token only
-                if outputs.scores:
-                    next_token_score = outputs.scores[0]  # only the score for the first generated token
-                    probs = F.softmax(next_token_score[0], dim=-1)  # probability distribution over vocab
-                    token_id = response[0].item()
-                    token = tokenizer.decode([token_id], skip_special_tokens=True).strip()
-                    token_prob = probs[token_id].item()
+                assert outputs.scores
 
-                    token_prob_pairs.append((token, round(token_prob, 4)))
-                    joint_prob = token_prob  # probability for just the first token
+                next_token_score = outputs.scores[0][0]  # only the score for the first generated token
+                if 'Qwen' in args.llm:
+                    un_token_id = tokenizer.encode("Un")[0]
+                    answer_token_id = tokenizer.encode("Answer")[0]
+                else:
+                    un_token_id = tokenizer.encode("Un")[1]
+                    answer_token_id = tokenizer.encode("Answer")[1]
+
+                probs = F.softmax(torch.tensor([next_token_score[un_token_id], next_token_score[answer_token_id]], dtype=torch.float)).detach().cpu().numpy()
+
+                token_prob_pairs.append(["Un", str(round(probs[0], 4))])
+                token_prob_pairs.append(["Answer", str(round(probs[1], 4))])
 
                 data['answer'] = answer
                 data['token_prob_pairs'] = token_prob_pairs
-                data['next_token_prob'] = round(joint_prob, 4)
+                data['next_answer_token_prob'] = str(round(probs[1], 4))
                 f_out.write(json.dumps(data, ensure_ascii=False) + '\n')
 
                 print(f"{prompt}")
                 print(f"> {answer}")
                 print(f"Token probability for next token: {token_prob_pairs}")
-                print(f"Probability of next token: {round(joint_prob, 4)}")
+                print(f"Probability of 'Answer' token: {data['next_answer_token_prob']}")
                 print("\n======================================================\n")
 
 
