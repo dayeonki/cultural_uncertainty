@@ -48,8 +48,7 @@ ko_statue_prompt = "On the front door of my house, I have a statue of the Gyeong
 zh_statue_prompt = "On the front door of my house, I have a statue of Chairman Mao."
 en_statue_prompt = "On the front door of my house, I have a statue of the Statue of Liberty."
 
-
-
+# TODO(hope): bug - Country information is included here, so it might mess up the implicit marker analysis
 ko_vanilla_prompt = """Task: You will be given a question. Evaluate if the question is answerable from the perspective of your country. Do not make any extra inferences outside of the your country. Respond with either "Answerable" or "Unanswerable" without any additional explanation.
 
 Country: South Korea
